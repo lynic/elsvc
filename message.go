@@ -22,6 +22,7 @@ type MsgBase struct {
 	MsgType     string
 	MsgRequest  interface{}
 	MsgResponse chan interface{}
+	TTL         int
 }
 
 func (s MsgBase) ID() string {
@@ -64,13 +65,31 @@ func (s *MsgBase) GetResponse() interface{} {
 	return <-s.MsgResponse
 }
 
+func (s *MsgBase) Expired() bool {
+	return s.TTL <= 0
+}
+
+func (s *MsgBase) DeTTL() {
+	s.TTL--
+}
+
 func NewMsg(msgTo, msgType string) MsgBase {
 	msg := MsgBase{
 		MsgTo:       msgTo,
 		MsgType:     msgType,
 		MsgResponse: make(chan interface{}, 1),
+		TTL:         defaultChanLength,
 	}
 	return msg
+}
+
+func SendToChan(ctx context.Context, chanName string, msg MessageIntf) error {
+	chans := ctx.Value(CtxKeyChans).(map[string]chan interface{})
+	if _, ok := chans[chanName]; !ok {
+		return fmt.Errorf("no channel %s to send %v", chanName, msg)
+	}
+	chans[chanName] <- msg
+	return nil
 }
 
 func SendMsg(ctx context.Context, msg MessageIntf) error {

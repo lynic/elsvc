@@ -96,7 +96,7 @@ func (s *Service) LoadConfig() error {
 func (s *Service) LoadPlugin(pc PluginConfig) (*PluginLoader, error) {
 	pluginPath := FindLatestSO(pc.Type, pc.PluginPath())
 	if pluginPath == "" {
-		return nil, fmt.Errorf("failed to find %s in %s", pc.Type, pc.PluginPath())
+		return nil, fmt.Errorf("failed to find plugin %s in %s", pc.Type, pc.PluginPath())
 	}
 	// if plugin not yet loaded
 	if _, ok := s.LoadedPlugins[pluginPath]; !ok {
@@ -218,42 +218,69 @@ func (s *Service) Start() error {
 	for {
 		select {
 		case v := <-s.Chans[ChanKeyService]:
-			switch v.(type) {
+			// switch v.(type) {
 			// only support MsgBase
-			case MsgBase:
-				msg := v.(MsgBase)
-				switch msg.Type() {
-				case MsgTypeStop:
-					logrus.Infof("Received stop msg, stopping service")
-					err := s.Stop()
-					msg.SetResponse(err)
-					WaitGoroutines()
-					return nil
-				case MsgUnloadPlugin:
-					pluginName := msg.GetRequest().(string)
-					err := s.UnloadPlugin(pluginName)
-					msg.SetResponse(err)
-				case MsgLoadPlugin:
-					pc := msg.GetRequest().(PluginConfig)
-					_, err := s.LoadPlugin(pc)
-					if err != nil {
-						msg.SetResponse(err)
-					}
-					err = s.InitPlugin(pc)
-					if err != nil {
-						msg.SetResponse(err)
-					}
-					err = s.StartPlugin(pc.Type)
-					if err != nil {
-						msg.SetResponse(err)
-					}
-					msg.SetResponse(nil)
-				}
-			default:
+			msg, ok := v.(MsgBase)
+			if !ok {
 				logrus.Errorf("received invalid msg %+v", v)
+				continue
 			}
-		}
-	}
+			// case MsgBase:
+			// msg := v.(MsgBase)
+
+			// message sent to service for routing
+			if msg.To() != ChanKeyService {
+				// route message to corresponding chan
+				if _, ok := s.Chans[msg.To()]; ok {
+					s.Chans[msg.To()] <- msg
+					continue
+				}
+				// channel not ready yet for this message
+				// put msg back to queue
+				msg.DeTTL()
+				if msg.Expired() {
+					// reach ttl EOL
+					// drop msg
+					logrus.Infof("drop eol message %v", msg)
+					continue
+				}
+				s.Chans[ChanKeyService] <- msg
+			}
+
+			// msg.To() == ChanKeyService
+			// message for service
+			switch msg.Type() {
+			case MsgTypeStop:
+				logrus.Infof("Received stop msg, stopping service")
+				err := s.Stop()
+				msg.SetResponse(err)
+				WaitGoroutines()
+				return nil
+			case MsgUnloadPlugin:
+				pluginName := msg.GetRequest().(string)
+				err := s.UnloadPlugin(pluginName)
+				msg.SetResponse(err)
+			case MsgLoadPlugin:
+				pc := msg.GetRequest().(PluginConfig)
+				_, err := s.LoadPlugin(pc)
+				if err != nil {
+					msg.SetResponse(err)
+				}
+				err = s.InitPlugin(pc)
+				if err != nil {
+					msg.SetResponse(err)
+				}
+				err = s.StartPlugin(pc.Type)
+				if err != nil {
+					msg.SetResponse(err)
+				}
+				msg.SetResponse(nil)
+			}
+			// default:
+			// 	logrus.Errorf("received invalid msg %+v", v)
+			// }
+		} // end select
+	} // end for
 }
 
 func (s *Service) UnloadPlugins() error {

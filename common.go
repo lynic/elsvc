@@ -29,11 +29,8 @@ func IsFile(name string) bool {
 }
 
 func WaitGoroutines() {
-	for {
+	for runtime.NumGoroutine() > 1 {
 		logrus.Debugf("wait goruntines: %d", runtime.NumGoroutine())
-		if runtime.NumGoroutine() == 1 {
-			return
-		}
 		time.Sleep(1 * time.Second)
 	}
 }

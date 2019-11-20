@@ -79,8 +79,9 @@ func (s *PluginLoader) Start(ctx context.Context) error {
 	go func() {
 		err := s.elplugin.Start(ctx)
 		if err != nil {
-			logrus.Errorf("error in %s start: %s", s.PluginPath(), err.Error())
+			logrus.Errorf("plugin %s error from start: %s", s.PluginPath(), err.Error())
 		}
+		logrus.Infof("plugin %s return from Start()", s.PluginPath())
 	}()
 	return nil
 }
