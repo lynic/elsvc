@@ -106,13 +106,16 @@ func (s *Service) LoadPlugin(pc PluginConfig) (*PluginLoader, error) {
 		if err != nil {
 			return nil, err
 		}
-		pl.Name = pc.Type
 		s.LoadedPlugins[pluginPath] = pl
+		// make sure ModuleName is equal with type parsed in
+		if pl.Name() != pc.Type {
+			return nil, fmt.Errorf("ModuleName %s != plugin type %s", pl.Name(), pc.Type)
+		}
 	}
 	pl := s.LoadedPlugins[pluginPath]
-	s.Plugins[pc.Type] = pl
-	s.Chans[pc.Type] = s.GetChan(pc.Type, pc.ChanLen())
-	logrus.Debugf("Loaded plugin %s", pl.Name)
+	s.Plugins[pl.Name()] = pl
+	s.Chans[pl.Name()] = s.GetChan(pl.Name(), pc.ChanLen())
+	logrus.Debugf("Loaded plugin %s", pl.Name())
 	return pl, nil
 }
 

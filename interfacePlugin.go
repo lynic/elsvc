@@ -3,6 +3,7 @@ package elsvc
 import "context"
 
 type PluginIntf interface {
+	ModuleName() string
 	Init(context.Context) error
 	Start(context.Context) error
 	Stop(context.Context) error

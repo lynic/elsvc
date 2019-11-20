@@ -7,7 +7,13 @@ import (
 
 var PluginObj Hello
 
+const ModuleName = "hello"
+
 type Hello struct{}
+
+func (s Hello) ModuleName() string {
+	return ModuleName
+}
 
 func (s *Hello) Init(context.Context) error {
 	fmt.Println("Hello.1 init")

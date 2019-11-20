@@ -19,7 +19,7 @@ const (
 )
 
 type PluginLoader struct {
-	Name     string
+	// Name     string
 	goplugin *plugin.Plugin
 	elplugin PluginIntf
 	fullPath string
@@ -29,30 +29,15 @@ func (s PluginLoader) PluginPath() string {
 	return s.fullPath
 }
 
+func (s PluginLoader) Name() string {
+	return s.elplugin.ModuleName()
+}
+
 func (s *PluginLoader) Load(pluginPath string) error {
 	p, err := plugin.Open(pluginPath)
 	if err != nil {
 		return err
 	}
-	// s.funcs = make(map[string]plugin.Symbol)
-	// // lookup init
-	// initFunc, err := p.Lookup(FuncInit)
-	// if err != nil {
-	// 	return err
-	// }
-	// s.funcs[FuncInit] = initFunc
-	// // lookup start
-	// startFunc, err := p.Lookup(FuncStart)
-	// if err != nil {
-	// 	return err
-	// }
-	// s.funcs[FuncStart] = startFunc
-	// // lookup stop
-	// stopFunc, err := p.Lookup(FuncStop)
-	// if err != nil {
-	// 	return err
-	// }
-	// s.funcs[FuncStop] = stopFunc
 	symbol, err := p.Lookup("PluginObj")
 	if err != nil {
 		return errors.Wrapf(err, "failed to find PluginObj in %s", pluginPath)
