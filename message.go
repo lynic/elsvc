@@ -122,3 +122,12 @@ func GetConfig(ctx context.Context) map[string]interface{} {
 	}
 	return v.(map[string]interface{})
 }
+
+func GetChans(ctx context.Context) map[string]chan interface{} {
+	return ctx.Value(CtxKeyChans).(map[string]chan interface{})
+}
+
+func GetChan(ctx context.Context, chanName string) chan interface{} {
+	chans := GetChans(ctx)
+	return chans[chanName]
+}
