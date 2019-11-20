@@ -1,8 +1,9 @@
 package main
 
 import (
-	"elsvc"
 	"os"
+
+	"github.com/lynic/elsvc"
 
 	"github.com/sirupsen/logrus"
 )

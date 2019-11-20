@@ -1,4 +1,4 @@
-module elsvc
+module github.com/lynic/elsvc
 
 go 1.13
 
