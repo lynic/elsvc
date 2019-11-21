@@ -7,4 +7,6 @@ COPY ./elsvc /opt/
 RUN  mkdir /opt/etc/ && \
      mkdir /opt/plugins/
 
+WORKDIR /opt/
+
 CMD ["/opt/elsvc"]
