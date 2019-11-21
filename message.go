@@ -2,6 +2,7 @@ package elsvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -121,6 +122,20 @@ func GetConfig(ctx context.Context) map[string]interface{} {
 		return ret
 	}
 	return v.(map[string]interface{})
+}
+
+//LoadConfig load config to a struct
+func LoadConfig(ctx context.Context, v interface{}) error {
+	conf := ctx.Value(CtxKeyConfig)
+	if v == nil {
+		return fmt.Errorf("no config in context")
+	}
+	data, _ := json.Marshal(conf)
+	err := json.Unmarshal(data, v)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetChans(ctx context.Context) map[string]chan interface{} {
