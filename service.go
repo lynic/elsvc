@@ -2,6 +2,7 @@ package elsvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,12 @@ import (
 const (
 	defaultChanLength = 1000
 	ChanKeyService    = "common"
+	minGoroutineNum   = 2
+)
+
+const (
+	PluginModeGO = "goplugin"
+	PluginModeHC = "hcplugin"
 )
 
 const (
@@ -23,7 +30,6 @@ const (
 )
 
 type PluginConfig struct {
-	// Name       string                 `json:"name"`
 	Type       string                 `json:"type"`
 	PluginDir  string                 `json:"plugin_path"`
 	ChanLength int                    `json:"chan_len"`
@@ -50,13 +56,14 @@ func (s PluginConfig) ChanLen() int {
 }
 
 type ServiceConfig struct {
-	LogLevel string         `json:"log_level"`
-	Plugins  []PluginConfig `json:"plugins"`
+	LogLevel   string         `json:"log_level"`
+	PluginMode string         `json:"plugin_mode"`
+	Plugins    []PluginConfig `json:"plugins"`
 }
 
 type Service struct {
-	LoadedPlugins map[string]*PluginLoader // since plugin couldn't unload, reload plugin will lookup here
-	Plugins       map[string]*PluginLoader
+	LoadedPlugins map[string]PluginLoaderIntf // since plugin couldn't unload, reload plugin will lookup here
+	Plugins       map[string]PluginLoaderIntf
 	Chans         map[string]chan interface{}
 	cancelFuncs   map[string]context.CancelFunc
 	config        *ServiceConfig
@@ -75,12 +82,17 @@ func (s *Service) GetChan(name string, opts ...interface{}) chan interface{} {
 	return s.Chans[name]
 }
 
-func (s *Service) LoadConfig() error {
-	confPath := os.Getenv("CONFIGPATH")
-	if confPath == "" {
-		return fmt.Errorf("env CONFIGPATH is empty")
+func (s *Service) LoadConfig(configPath string) error {
+	// load passed config file first
+	if configPath == "" {
+		// if empty, load env passed config file
+		configPath = os.Getenv("CONFIGPATH")
+		if configPath == "" {
+			// if both empty, return err
+			return fmt.Errorf("env CONFIGPATH is empty")
+		}
 	}
-	data, err := ioutil.ReadFile(confPath)
+	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
@@ -89,11 +101,17 @@ func (s *Service) LoadConfig() error {
 	if err != nil {
 		return err
 	}
+	if confObj.PluginMode == "" {
+		confObj.PluginMode = "goplugin"
+	}
+	if confObj.PluginMode != PluginModeGO && confObj.PluginMode != PluginModeHC {
+		return fmt.Errorf("Plugin mode %s is neither %s nor %s", confObj.PluginMode, PluginModeGO, PluginModeHC)
+	}
 	s.config = confObj
 	return nil
 }
 
-func (s *Service) LoadPlugin(pc PluginConfig) (*PluginLoader, error) {
+func (s *Service) LoadPlugin(pc PluginConfig) (PluginLoaderIntf, error) {
 	pluginPath := FindLatestSO(pc.Type, pc.PluginPath())
 	if pluginPath == "" {
 		return nil, fmt.Errorf("failed to find plugin %s in %s", pc.Type, pc.PluginPath())
@@ -101,8 +119,15 @@ func (s *Service) LoadPlugin(pc PluginConfig) (*PluginLoader, error) {
 	// if plugin not yet loaded
 	if _, ok := s.LoadedPlugins[pluginPath]; !ok {
 		logrus.Debugf("Loading plugin %s", pluginPath)
-		pl := &PluginLoader{}
-		err := pl.Load(pluginPath)
+		var pl PluginLoaderIntf
+		switch s.config.PluginMode {
+		case PluginModeGO:
+			pl = &PluginLoader{}
+		case PluginModeHC:
+			pl = &PluginRunner{}
+		}
+		// pl := &PluginLoader{}
+		err := pl.Load(pc)
 		if err != nil {
 			return nil, err
 		}
@@ -121,6 +146,7 @@ func (s *Service) LoadPlugin(pc PluginConfig) (*PluginLoader, error) {
 
 func (s *Service) InitPlugin(pc PluginConfig) error {
 	// init plugin
+	logrus.Infof("initing plugin %s", pc.Type)
 	ctx := context.WithValue(
 		context.Background(), CtxKeyConfig, pc.Config())
 	pl := s.Plugins[pc.Type]
@@ -128,6 +154,7 @@ func (s *Service) InitPlugin(pc PluginConfig) error {
 	if err != nil {
 		return err
 	}
+	logrus.Infof("inited plugin %s", pc.Type)
 	return nil
 }
 
@@ -153,7 +180,7 @@ func (s *Service) UnloadPlugin(pluginType string) error {
 	// send cancel to start
 	s.cancelFuncs[pluginType]()
 	// run plugin stop
-	logrus.Debugf("Stopping plugin %s", pl.Name)
+	logrus.Debugf("Stopping plugin %s", pl.Name())
 	err := pl.Stop(context.Background())
 	if err != nil {
 		return errors.Wrapf(err, "failed to stop plugin %s", pluginType)
@@ -166,18 +193,18 @@ func (s *Service) UnloadPlugin(pluginType string) error {
 	return nil
 }
 
-func (s *Service) Init() error {
+func (s *Service) Init(configPath string) error {
 	var err error
 
-	s.LoadedPlugins = make(map[string]*PluginLoader)
-	s.Plugins = make(map[string]*PluginLoader)
+	s.LoadedPlugins = make(map[string]PluginLoaderIntf)
+	s.Plugins = make(map[string]PluginLoaderIntf)
 	s.cancelFuncs = make(map[string]context.CancelFunc)
 	// init default chan
 	s.Chans = make(map[string]chan interface{})
 	s.GetChan(ChanKeyService, defaultChanLength)
 
 	// load config
-	err = s.LoadConfig()
+	err = s.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
@@ -256,28 +283,35 @@ func (s *Service) Start() error {
 			case MsgTypeStop:
 				logrus.Infof("Received stop msg, stopping service")
 				err := s.Stop()
-				msg.SetResponse(err)
-				WaitGoroutines()
+				msg.SetResponse(map[string]interface{}{"error": err})
+				WaitGoroutines(minGoroutineNum)
 				return nil
 			case MsgUnloadPlugin:
-				pluginName := msg.GetRequest().(string)
+				pluginName := msg.GetRequest()["name"].(string)
 				err := s.UnloadPlugin(pluginName)
-				msg.SetResponse(err)
+				msg.SetResponse(map[string]interface{}{"error": err})
 			case MsgLoadPlugin:
-				pc := msg.GetRequest().(PluginConfig)
-				_, err := s.LoadPlugin(pc)
+				pc := PluginConfig{}
+				data, _ := json.Marshal(msg.GetRequest())
+				err := json.Unmarshal(data, &pc)
 				if err != nil {
-					msg.SetResponse(err)
+					msg.SetResponse(map[string]interface{}{"error": err})
+				}
+				// LoadConfig(msg.GetRequest()["PluginConfig"], &pc)
+				// pc := msg.GetRequest()["PluginConfig"].(PluginConfig)
+				_, err = s.LoadPlugin(pc)
+				if err != nil {
+					msg.SetResponse(map[string]interface{}{"error": err})
 				}
 				err = s.InitPlugin(pc)
 				if err != nil {
-					msg.SetResponse(err)
+					msg.SetResponse(map[string]interface{}{"error": err})
 				}
 				err = s.StartPlugin(pc.Type)
 				if err != nil {
-					msg.SetResponse(err)
+					msg.SetResponse(map[string]interface{}{"error": err})
 				}
-				msg.SetResponse(nil)
+				msg.SetResponse(map[string]interface{}{"error": nil})
 			}
 			// default:
 			// 	logrus.Errorf("received invalid msg %+v", v)

@@ -5,7 +5,9 @@ import (
 	"fmt"
 )
 
-var PluginObj Hello
+//go build -buildmode=plugin -o hello.so plugins/hello/hello.go
+
+var PluginObj *Hello
 
 const ModuleName = "hello"
 
@@ -36,5 +38,5 @@ func (s *Hello) Stop(context.Context) error {
 
 func init() {
 	fmt.Println("in Hello plugin init")
-	PluginObj = Hello{}
+	PluginObj = &Hello{}
 }

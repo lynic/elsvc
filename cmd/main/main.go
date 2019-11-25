@@ -14,15 +14,7 @@ func main() {
 	})
 	logrus.SetOutput(os.Stdout)
 	logrus.SetLevel(logrus.DebugLevel)
-	svc := &elsvc.Service{}
-	logrus.Info("init service")
-	err := svc.Init()
-	if err != nil {
-		logrus.Error(err)
-		return
-	}
-	logrus.Info("start service")
-	err = svc.Start()
+	err := elsvc.StartGOPlugin("")
 	if err != nil {
 		logrus.Error(err)
 		return

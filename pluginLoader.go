@@ -18,22 +18,33 @@ const (
 	FuncStop  = "Stop"
 )
 
-type PluginLoader struct {
-	// Name     string
-	goplugin *plugin.Plugin
-	elplugin PluginIntf
-	fullPath string
+type PluginLoaderIntf interface {
+	Name() string
+	Load(PluginConfig) error
+	Init(ctx context.Context) error
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
 }
 
-func (s PluginLoader) PluginPath() string {
-	return s.fullPath
+type PluginLoader struct {
+	goplugin   *plugin.Plugin
+	elplugin   PluginIntf
+	pluginPath string
 }
+
+// func (s PluginLoader) PluginPath() string {
+// 	return s.pluginPath
+// }
 
 func (s PluginLoader) Name() string {
 	return s.elplugin.ModuleName()
 }
 
-func (s *PluginLoader) Load(pluginPath string) error {
+func (s *PluginLoader) Load(pc PluginConfig) error {
+	pluginPath := FindLatestSO(pc.Type, pc.PluginPath())
+	if pluginPath == "" {
+		return fmt.Errorf("failed to find plugin for %s", pc.Type)
+	}
 	p, err := plugin.Open(pluginPath)
 	if err != nil {
 		return err
@@ -48,32 +59,26 @@ func (s *PluginLoader) Load(pluginPath string) error {
 	}
 	s.elplugin = elp
 	s.goplugin = p
-	s.fullPath = pluginPath
+	s.pluginPath = pluginPath
 	return nil
 }
 
 func (s *PluginLoader) Init(ctx context.Context) error {
-	// initFunc := s.funcs[FuncInit].(func(context.Context) error)
-	// return initFunc(ctx)
 	return s.elplugin.Init(ctx)
 }
 
 func (s *PluginLoader) Start(ctx context.Context) error {
-	// startFunc := s.funcs[FuncStart].(func(context.Context) error)
-	// return startFunc(ctx)
 	go func() {
 		err := s.elplugin.Start(ctx)
 		if err != nil {
-			logrus.Errorf("plugin %s error from start: %s", s.PluginPath(), err.Error())
+			logrus.Errorf("plugin %s error from start: %s", s.pluginPath, err.Error())
 		}
-		logrus.Infof("plugin %s return from Start()", s.PluginPath())
+		logrus.Infof("plugin %s return from Start()", s.pluginPath)
 	}()
 	return nil
 }
 
 func (s *PluginLoader) Stop(ctx context.Context) error {
-	// stopFunc := s.funcs[FuncStop].(func(context.Context) error)
-	// return stopFunc(ctx)
 	return s.elplugin.Stop(ctx)
 }
 

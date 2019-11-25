@@ -1,0 +1,41 @@
+syntax = "proto3";
+package proto;
+
+// apt install protobuf-compiler
+// apt install clang-format
+// go get -u google.golang.org/grpc
+// go get -u github.com/golang/protobuf/protoc-gen-go
+// protoc -I. -I$GOPATH/src -I/usr/local/include  --go_out=plugins=grpc:. message.proto
+
+// import "google/protobuf/timestamp.proto";
+
+service PluginSvc {
+  rpc Request(MsgRequest) returns (MsgResponse);
+}
+
+message MsgEmpty {}
+
+message MsgLog {
+  string module = 1;
+  string loglevel = 2;
+  string message = 3;
+  uint64 timestamp = 4;
+}
+
+message MsgRequest {
+  string id = 1;
+  string from = 2;
+  string to = 3;
+  string type = 4;
+  int64 ttl = 5;
+  bytes request = 6;
+}
+
+message MsgResponse {
+  string id = 1;
+  string from = 2;
+  string to = 3;
+  string type = 4;
+  int64 code = 5;
+  bytes response = 6;
+}
