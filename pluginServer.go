@@ -107,13 +107,15 @@ func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 	case MsgFuncStart:
 		msg, _ := ReqMsg(req)
 		// create bidirection grpc connection
-		brokerID := uint32(msg.GetResponse()["brokerID"].(int))
+		brokerID := uint32(msg.GetRequest()["brokerID"].(float64))
+		// return &proto.MsgResponse{Response: []byte(fmt.Sprintf("{\"brokerid\": \"%s\"}", brokerID))}, nil
 		conn, err := s.broker.Dial(brokerID)
 		if err != nil {
 			return nil, err
 		}
 		s.conn = conn
 		s.client = proto.NewPluginSvcClient(conn)
+
 		// create chans for plugin
 		s.chans = make(map[string]chan interface{})
 		s.chans[s.PluginImpl.ModuleName()] = make(chan interface{}, defaultChanLength)
@@ -127,16 +129,6 @@ func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		// go plugin.start here, result will be send through MsgStartError
 		go s.startWrapper(ctx)
 		return &proto.MsgResponse{}, nil
-		// err = s.PluginImpl.Start(ctx)
-		// resp := &proto.MsgResponse{}
-		// if err != nil {
-		// 	data, _ := json.Marshal(map[string]interface{}{"error": err.Error()})
-		// 	resp.Response = data
-		// 	return resp, nil
-		// }
-		// data, _ := json.Marshal(map[string]interface{}{"error": ""})
-		// resp.Response = data
-		// return resp, nil
 	case MsgFuncStop:
 		err := s.PluginImpl.Stop(context.Background())
 		resp := &proto.MsgResponse{}

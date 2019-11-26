@@ -14,8 +14,8 @@ type MessageIntf interface {
 	From() string
 	ID() string
 	Type() string
-	SetRequest(interface{}) error
-	GetRequest() interface{}
-	SetResponse(interface{}) error
-	GetResponse() interface{}
+	GetRequest() map[string]interface{}
+	SetRequest(map[string]interface{}) error
+	GetResponse() map[string]interface{}
+	SetResponse(map[string]interface{}) error
 }

@@ -41,7 +41,7 @@ func (s MsgBase) Type() string {
 	return s.MsgType
 }
 
-func (s *MsgBase) GetRequest() map[string]interface{} {
+func (s MsgBase) GetRequest() map[string]interface{} {
 	req := s.MsgRequest
 	// tricky to handle two types of plugins
 	for k, v := range req {
@@ -61,7 +61,7 @@ func (s *MsgBase) GetRequest() map[string]interface{} {
 	return s.MsgRequest
 }
 
-func (s *MsgBase) GetRequestBytes() []byte {
+func (s MsgBase) GetRequestBytes() []byte {
 	req := s.MsgRequest
 	// tricky to handle two types of plugins
 	for k, v := range req {
@@ -126,7 +126,7 @@ func (s *MsgBase) SetRequestBytes(data []byte) error {
 }
 
 //GetResponse get response
-func (s *MsgBase) GetResponse() map[string]interface{} {
+func (s MsgBase) GetResponse() map[string]interface{} {
 	resp := <-s.MsgResponse
 	// tricky to handle two types of plugins
 	for k, v := range resp {
@@ -146,7 +146,7 @@ func (s *MsgBase) GetResponse() map[string]interface{} {
 	return resp
 }
 
-func (s *MsgBase) GetResponseBytes() []byte {
+func (s MsgBase) GetResponseBytes() []byte {
 	resp := <-s.MsgResponse
 	if resp == nil {
 		return []byte("")
