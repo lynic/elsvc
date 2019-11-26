@@ -24,7 +24,7 @@ type GRPCPlugin struct {
 	plugin.Plugin
 	// Concrete implementation, written in Go. This is only used for plugins
 	// that are written in Go.
-	PluginServer *PluginServer
+	PluginServer *pluginServer
 }
 
 func (p *GRPCPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
@@ -52,7 +52,7 @@ type PluginClient struct {
 // 	return &proto.MsgResponse{}, nil
 // }
 
-func ReqMsg(req *proto.MsgRequest) (MsgBase, error) {
+func reqMsg(req *proto.MsgRequest) (MsgBase, error) {
 	msg := NewMsg(req.To, req.Type)
 	msg.MsgFrom = req.From
 	msg.MsgId = req.Id
@@ -61,7 +61,7 @@ func ReqMsg(req *proto.MsgRequest) (MsgBase, error) {
 	return msg, nil
 }
 
-func MsgReq(msg MsgBase) (*proto.MsgRequest, error) {
+func msgReq(msg MsgBase) (*proto.MsgRequest, error) {
 	ret := &proto.MsgRequest{
 		Id:      msg.ID(),
 		From:    msg.From(),
@@ -80,7 +80,7 @@ func MsgReq(msg MsgBase) (*proto.MsgRequest, error) {
 	return ret, nil
 }
 
-func RespMsg(resp *proto.MsgResponse) (MsgBase, error) {
+func respMsg(resp *proto.MsgResponse) (MsgBase, error) {
 	msg := NewMsg(resp.To, resp.Type)
 	msg.MsgFrom = resp.From
 	msg.MsgId = resp.Id
@@ -88,7 +88,7 @@ func RespMsg(resp *proto.MsgResponse) (MsgBase, error) {
 	return msg, nil
 }
 
-func MsgResp(msg MsgBase) (*proto.MsgResponse, error) {
+func msgResp(msg MsgBase) (*proto.MsgResponse, error) {
 	resp := &proto.MsgResponse{}
 	resp.Id = msg.ID()
 	resp.From = msg.From()

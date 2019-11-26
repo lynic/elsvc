@@ -6,8 +6,10 @@ import (
 )
 
 const (
-	CtxKeyChans  = "chans"
-	CtxKeyConfig = "config"
+	CtxKeyChans   = "chans"
+	CtxKeyConfig  = "config"
+	CtxKeyInchan  = "in_chan"
+	CtxKeyOutchan = "out_chan"
 )
 
 const (
@@ -208,10 +210,10 @@ func (s *MsgBase) SetResponseBytes(data []byte) error {
 	return s.SetResponse(resp)
 }
 
-func (s *MsgBase) Expired() bool {
-	return s.TTL <= 0
-}
+// func (s *MsgBase) Expired() bool {
+// 	return s.TTL <= 0
+// }
 
-func (s *MsgBase) DeTTL() {
-	s.TTL--
-}
+// func (s *MsgBase) DeTTL() {
+// 	s.TTL--
+// }

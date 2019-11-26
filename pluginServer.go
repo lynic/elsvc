@@ -3,43 +3,23 @@ package elsvc
 import (
 	context "context"
 	"encoding/json"
-	fmt "fmt"
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/lynic/elsvc/proto"
 	"google.golang.org/grpc"
 )
 
-//StartPlugin only used for hcplugin mode
-//call this function in main()
-func StartPlugin(pl PluginIntf) error {
-	//setup logger
-	setupLoggerPlugin()
-	//load plugin
-	pluginMap := map[string]plugin.Plugin{
-		PluginMapKey: &GRPCPlugin{
-			PluginServer: &PluginServer{PluginImpl: pl},
-		},
-	}
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: HandshakeConf(),
-		Plugins:         pluginMap,
-		// A non-nil value here enables gRPC serving for this plugin...
-		GRPCServer: plugin.DefaultGRPCServer,
-	})
-	return nil
-}
-
-type PluginServer struct {
+type pluginServer struct {
 	PluginImpl  PluginIntf
 	broker      *plugin.GRPCBroker
 	cancelStart context.CancelFunc
 	conn        *grpc.ClientConn
 	client      proto.PluginSvcClient
 	chans       map[string]chan interface{}
+	logger      *Logger
 }
 
-func (s *PluginServer) handler(ctx context.Context) error {
+func (s *pluginServer) handler(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -47,15 +27,20 @@ func (s *PluginServer) handler(ctx context.Context) error {
 		// if this msg wants to send out
 		// send from grpc tunnel
 		case v := <-s.chans[ChanKeyService]:
-			msg := v.(MsgBase)
-			req, err := MsgReq(msg)
+			s.logger.Debug("Recv msg from outchan %+v", v)
+			msg, ok := v.(MsgBase)
+			if !ok {
+				s.logger.Error("failed to convert to MsgBase: %+v", v)
+				continue
+			}
+			req, err := msgReq(msg)
 			if err != nil {
-				logger.Error("failed to convert %+v to pbReq: %s", msg, err.Error())
+				s.logger.Error("failed to convert %+v to pbReq: %s", msg, err.Error())
 				continue
 			}
 			resp, err := s.client.Request(context.Background(), req)
 			if err != nil {
-				logger.Error("failed to to get response from req: %s", err.Error())
+				s.logger.Error("failed to to get response from req: %s", err.Error())
 				continue
 			}
 			msg.SetRequestBytes(resp.Response)
@@ -64,11 +49,11 @@ func (s *PluginServer) handler(ctx context.Context) error {
 	return nil
 }
 
-func (s *PluginServer) startWrapper(ctx context.Context) error {
+func (s *pluginServer) startWrapper(ctx context.Context) error {
 	err := s.PluginImpl.Start(ctx)
 	msg := NewMsg(s.PluginImpl.ModuleName(), MsgStartError)
 	msg.SetRequest(map[string]interface{}{"error": err})
-	req, _ := MsgReq(msg)
+	req, _ := msgReq(msg)
 	_, err = s.client.Request(context.Background(), req)
 	if err != nil {
 		return err
@@ -76,27 +61,28 @@ func (s *PluginServer) startWrapper(ctx context.Context) error {
 	return nil
 }
 
-func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*proto.MsgResponse, error) {
-	fmt.Printf("Request: %+v", *req)
+func (s *pluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*proto.MsgResponse, error) {
 	switch req.Type {
 	case MsgFuncName:
 		name := s.PluginImpl.ModuleName()
 		msg := NewMsg(name, req.Type)
 		msg.SetResponse(map[string]interface{}{"name": name})
-		resp, err := MsgResp(msg)
+		resp, err := msgResp(msg)
 		if err != nil {
 			return nil, err
 		}
 		return resp, nil
 	case MsgFuncInit:
+		s.logger.Debug("Recv init req: %+v", req)
 		resp := &proto.MsgResponse{}
-		conf := &PluginConfig{}
-		err := json.Unmarshal(req.Request, conf)
+		conf := make(map[string]interface{})
+		err := json.Unmarshal(req.Request, &conf)
 		if err != nil {
 			data, _ := json.Marshal(map[string]interface{}{"error": err.Error()})
 			resp.Response = data
 			return resp, nil
 		}
+		s.logger.Debug("Init config content: %+v", conf)
 		ctx := context.WithValue(context.Background(), CtxKeyConfig, conf)
 		err = s.PluginImpl.Init(ctx)
 		if err != nil {
@@ -108,10 +94,10 @@ func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		resp.Response = data
 		return resp, nil
 	case MsgFuncStart:
-		msg, _ := ReqMsg(req)
+		s.logger.Debug("Recv start req: %+v", req)
+		msg, _ := reqMsg(req)
 		// create bidirection grpc connection
 		brokerID := uint32(msg.GetRequest()["brokerID"].(float64))
-		// return &proto.MsgResponse{Response: []byte(fmt.Sprintf("{\"brokerid\": \"%s\"}", brokerID))}, nil
 		conn, err := s.broker.Dial(brokerID)
 		if err != nil {
 			return nil, err
@@ -125,7 +111,10 @@ func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		s.chans[ChanKeyService] = make(chan interface{}, defaultChanLength)
 
 		// create ctx for start
-		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), CtxKeyChans, s.chans))
+		ctx := context.WithValue(context.Background(), CtxKeyInchan, s.chans[s.PluginImpl.ModuleName()])
+		ctx = context.WithValue(ctx, CtxKeyOutchan, s.chans[ChanKeyService])
+		ctx, cancel := context.WithCancel(ctx)
+		// ctx, cancel := context.WithCancel(context.WithValue(context.Background(), CtxKeyChans, s.chans))
 		s.cancelStart = cancel
 		// start chan handler
 		go s.handler(ctx)
@@ -133,6 +122,7 @@ func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		go s.startWrapper(ctx)
 		return &proto.MsgResponse{}, nil
 	case MsgFuncStop:
+		s.logger.Debug("Recv stop req: %+v", req)
 		err := s.PluginImpl.Stop(context.Background())
 		resp := &proto.MsgResponse{}
 		if err != nil {
@@ -144,9 +134,22 @@ func (s *PluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		resp.Response = data
 		return resp, nil
 	case MsgCtxDone:
+		s.logger.Debug("Recv ctxDone req: %+v", req)
 		// cancel from start
 		s.cancelStart()
 		s.conn.Close()
+	default:
+		s.logger.Debug("Recv req to inChan: %+v", req)
+		// receive inchan message
+		msg, err := reqMsg(req)
+		if err != nil {
+			err := s.logger.Error("failed to convert req: %+v", req)
+			resp := &proto.MsgResponse{}
+			data, _ := json.Marshal(map[string]interface{}{"error": err.Error()})
+			resp.Response = data
+			return resp, nil
+		}
+		s.chans[s.PluginImpl.ModuleName()] <- msg
 	}
 	return &proto.MsgResponse{}, nil
 }

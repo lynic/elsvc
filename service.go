@@ -32,10 +32,10 @@ const (
 )
 
 type PluginConfig struct {
-	Type       string                 `json:"type"`
-	PluginDir  string                 `json:"plugin_path"`
-	ChanLength int                    `json:"chan_len"`
-	ConfMap    map[string]interface{} `json:"config"`
+	Type      string `json:"type"`
+	PluginDir string `json:"plugin_path"`
+	// ChanLength int                    `json:"chan_len"`
+	ConfMap map[string]interface{} `json:"config"`
 }
 
 func (s PluginConfig) PluginPath() string {
@@ -52,10 +52,13 @@ func (s PluginConfig) Config() map[string]interface{} {
 	return s.ConfMap
 }
 
-func (s PluginConfig) ChanLen() int {
-	// TODO should I make it default to 1?
-	return s.ChanLength
-}
+// func (s PluginConfig) ChanLen() int {
+// 	// TODO should I make it default to 1?
+// 	if s.ChanLength == 0 {
+// 		return defaultChanLength
+// 	}
+// 	return s.ChanLength
+// }
 
 type ServiceConfig struct {
 	LogLevel   string         `json:"log_level"`
@@ -69,6 +72,7 @@ type Service struct {
 	Chans         map[string]chan interface{}
 	cancelFuncs   map[string]context.CancelFunc
 	config        *ServiceConfig
+	logger        *Logger
 }
 
 func (s *Service) GetChan(name string, opts ...interface{}) chan interface{} {
@@ -115,7 +119,7 @@ func (s *Service) LoadConfig(configPath string) error {
 
 func (s *Service) InitPlugin(pc PluginConfig) error {
 	// init plugin
-	logger.Info("Initing plugin %s", pc.Type)
+	s.logger.Info("Initing plugin %s", pc.Type)
 	ctx := context.WithValue(
 		context.Background(), CtxKeyConfig, pc.Config())
 	pl := s.Plugins[pc.Type]
@@ -123,16 +127,16 @@ func (s *Service) InitPlugin(pc PluginConfig) error {
 	if err != nil {
 		return err
 	}
-	logger.Info("Inited plugin %s", pc.Type)
+	s.logger.Info("Inited plugin %s", pc.Type)
 	return nil
 }
 
 func (s *Service) LoadPlugin(pc PluginConfig) (PluginLoaderIntf, error) {
-	pluginPath := FindLatestSO(pc.Type, pc.PluginPath())
+	pluginPath := findLatestSO(pc.Type, pc.PluginPath())
 	if pluginPath == "" {
 		return nil, fmt.Errorf("failed to find plugin %s in %s", pc.Type, pc.PluginPath())
 	}
-	logger.Info("Loading plugin %s", pluginPath)
+	s.logger.Info("Loading plugin %s", pluginPath)
 	var pl PluginLoaderIntf
 	switch s.config.PluginMode {
 	case PluginModeGO:
@@ -141,7 +145,7 @@ func (s *Service) LoadPlugin(pc PluginConfig) (PluginLoaderIntf, error) {
 			pl = s.LoadedPlugins[pluginPath]
 		} else {
 			// plugin not loaded yet
-			pl = &PluginLoader{}
+			pl = &pluginLoader{}
 			err := pl.Load(pc)
 			if err != nil {
 				return nil, err
@@ -153,7 +157,7 @@ func (s *Service) LoadPlugin(pc PluginConfig) (PluginLoaderIntf, error) {
 			}
 		}
 	case PluginModeHC:
-		pl = &PluginRunner{}
+		pl = &pluginRunner{}
 		err := pl.Load(pc)
 		if err != nil {
 			return nil, err
@@ -164,12 +168,13 @@ func (s *Service) LoadPlugin(pc PluginConfig) (PluginLoaderIntf, error) {
 		}
 	}
 	s.Plugins[pl.Name()] = pl
-	s.Chans[pl.Name()] = s.GetChan(pl.Name(), pc.ChanLen())
-	logger.Info("Loaded plugin %s", pl.Name())
+	s.Chans[pl.Name()] = s.GetChan(pl.Name(), defaultChanLength)
+	s.logger.Info("Loaded plugin %s", pl.Name())
 	return pl, nil
 }
 
 func (s *Service) LoadPlugins() error {
+	s.logger.Info("loading plugins...")
 	for _, pc := range s.config.Plugins {
 		_, err := s.LoadPlugin(pc)
 		if err != nil {
@@ -185,6 +190,7 @@ func (s *Service) LoadPlugins() error {
 
 func (s *Service) Init(configPath string) error {
 	var err error
+	s.logger = NewModLogger("service")
 
 	s.LoadedPlugins = make(map[string]PluginLoaderIntf)
 	s.Plugins = make(map[string]PluginLoaderIntf)
@@ -198,7 +204,7 @@ func (s *Service) Init(configPath string) error {
 	if err != nil {
 		return err
 	}
-
+	s.logger.Info("pluginMode: %s", s.config.PluginMode)
 	// load plugins
 	err = s.LoadPlugins()
 	if err != nil {
@@ -208,21 +214,23 @@ func (s *Service) Init(configPath string) error {
 }
 
 func (s *Service) StartPlugin(pluginName string) error {
-	logger.Info("Starting plugin %s", pluginName)
+	s.logger.Info("Starting plugin %s", pluginName)
 	pl := s.Plugins[pluginName]
-	ctx, cancel := context.WithCancel(context.WithValue(
-		context.Background(), CtxKeyChans, s.Chans))
+	ctx := context.WithValue(context.Background(), CtxKeyInchan, s.Chans[pluginName])
+	ctx = context.WithValue(ctx, CtxKeyOutchan, s.Chans[ChanKeyService])
+	// ctx = context.WithValue(ctx, CtxKeyChans, s.Chans)
+	ctx, cancel := context.WithCancel(ctx)
 	s.cancelFuncs[pluginName] = cancel
 	err := pl.Start(ctx)
 	if err != nil {
 		return err
 	}
-	logger.Info("Started plugin %s", pluginName)
+	s.logger.Info("Started plugin %s", pluginName)
 	return nil
 }
 
 func (s *Service) StartPlugins() error {
-	logger.Info("Starting Plugins")
+	s.logger.Info("Starting Plugins")
 	for ptype := range s.Plugins {
 		err := s.StartPlugin(ptype)
 		if err != nil {
@@ -238,7 +246,7 @@ func (s *Service) signalHandler() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		for sig := range c {
-			logger.Debug("Receive signal %+v", sig)
+			s.logger.Debug("Receive signal %+v", sig)
 			if sig.String() != os.Interrupt.String() {
 				continue
 			}
@@ -258,49 +266,53 @@ func (s *Service) Start() error {
 	for {
 		select {
 		case v := <-s.Chans[ChanKeyService]:
-			// switch v.(type) {
-			// only support MsgBase
+			// check if received a message
 			msg, ok := v.(MsgBase)
 			if !ok {
-				logger.Error("received invalid msg %+v", v)
+				s.logger.Error("dropping invalid msg %+v", v)
 				continue
 			}
-			// case MsgBase:
-			// msg := v.(MsgBase)
-
 			// message sent to service for routing
 			if msg.To() != ChanKeyService {
 				// route message to corresponding chan
 				if _, ok := s.Chans[msg.To()]; ok {
+					s.logger.Debug("routing msg: %+v", msg)
 					s.Chans[msg.To()] <- msg
+					continue
+				}
+				if msg.To() == "" {
+					s.logger.Error("dropping invalid msg %+v", v)
 					continue
 				}
 				// channel not ready yet for this message
 				// put msg back to queue
-				msg.DeTTL()
-				if msg.Expired() {
-					// reach ttl EOL
-					// drop msg
-					logger.Info("drop eol message %v", msg)
-					continue
-				}
+				// msg.DeTTL()
+				// if msg.Expired() {
+				// 	// reach ttl EOL
+				// 	// drop msg
+				// 	s.logger.Info("drop eol message %v", msg)
+				// 	continue
+				// }
+				//TODO should I directly drop message?
+				s.logger.Debug("channel not ready for msg: %+v", msg)
 				s.Chans[ChanKeyService] <- msg
 			}
 
-			// msg.To() == ChanKeyService
-			// message for service
 			switch msg.Type() {
 			case MsgTypeStop:
-				logger.Info("Received stop msg, stopping service")
+				// msg := v.(MsgBase)
+				s.logger.Info("Received stop msg, stopping service")
 				err := s.Stop()
 				msg.SetResponse(map[string]interface{}{"error": err})
 				WaitGoroutines(minGoroutineNum)
 				return nil
 			case MsgUnloadPlugin:
+				// msg := v.(MsgBase)
 				pluginName := msg.GetRequest()["name"].(string)
 				err := s.UnloadPlugin(pluginName)
 				msg.SetResponse(map[string]interface{}{"error": err})
 			case MsgLoadPlugin:
+				// msg := v.(MsgBase)
 				pc := PluginConfig{}
 				data, _ := json.Marshal(msg.GetRequest())
 				err := json.Unmarshal(data, &pc)
@@ -331,21 +343,21 @@ func (s *Service) Start() error {
 }
 
 func (s *Service) UnloadPlugin(pluginType string) error {
-	logger.Info("Unloading plugin %s", pluginType)
+	s.logger.Info("Unloading plugin %s", pluginType)
 	if _, ok := s.Plugins[pluginType]; !ok {
 		return fmt.Errorf("failed to unload plugin %s: %s not found ", pluginType, pluginType)
 	}
 	pl := s.Plugins[pluginType]
 	// send cancel to start
-	logger.Info("Send cancel message to plugin %s", pluginType)
+	s.logger.Info("Send cancel message to plugin %s", pluginType)
 	s.cancelFuncs[pluginType]()
 	// run plugin stop
-	logger.Info("Stopping plugin %s", pluginType)
+	s.logger.Info("Stopping plugin %s", pluginType)
 	err := pl.Stop(context.Background())
 	if err != nil {
 		return errors.Wrapf(err, "failed to stop plugin %s", pluginType)
 	}
-	logger.Info("Stopped plugin %s", pluginType)
+	s.logger.Info("Stopped plugin %s", pluginType)
 	// delete pluginMap
 	delete(s.Plugins, pluginType)
 	// delete loadedpluginMap if in hashicorp mode
@@ -361,7 +373,7 @@ func (s *Service) UnloadPlugin(pluginType string) error {
 	delete(s.Chans, pluginType)
 	// delete cancel
 	delete(s.cancelFuncs, pluginType)
-	logger.Info("Unloaded plugin %s", pluginType)
+	s.logger.Info("Unloaded plugin %s", pluginType)
 	return nil
 }
 

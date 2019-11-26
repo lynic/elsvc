@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	fmt "fmt"
 
-	"github.com/sirupsen/logrus"
+	"github.com/hashicorp/go-plugin"
 )
 
 func StartService(configPath string) error {
@@ -13,15 +13,38 @@ func StartService(configPath string) error {
 	logger.Info("Init service")
 	err := svc.Init(configPath)
 	if err != nil {
-		logrus.Error(err)
+		logger.Error(err.Error())
 		return err
 	}
 	logger.Info("Start service")
 	err = svc.Start()
 	if err != nil {
-		logrus.Error(err)
+		logger.Error(err.Error())
 		return err
 	}
+	return nil
+}
+
+//StartPlugin only used for hcplugin mode
+//call this function in main()
+func StartPlugin(pl PluginIntf) error {
+	//setup logger
+	setupLoggerPlugin()
+	//load plugin
+	pluginMap := map[string]plugin.Plugin{
+		PluginMapKey: &GRPCPlugin{
+			PluginServer: &pluginServer{
+				PluginImpl: pl,
+				logger:     NewModLogger(fmt.Sprintf("pluginServer.%s", pl.ModuleName())),
+			},
+		},
+	}
+	plugin.Serve(&plugin.ServeConfig{
+		HandshakeConfig: HandshakeConf(),
+		Plugins:         pluginMap,
+		// A non-nil value here enables gRPC serving for this plugin...
+		GRPCServer: plugin.DefaultGRPCServer,
+	})
 	return nil
 }
 
@@ -36,33 +59,17 @@ func NewMsg(msgTo, msgType string) MsgBase {
 	return msg
 }
 
-func SendMsg(ctx context.Context, msg MessageIntf) error {
-	chans := ctx.Value(CtxKeyChans).(map[string]chan interface{})
-	to := msg.To()
-	if _, ok := chans[to]; !ok {
-		if _, exist := chans[ChanKeyService]; !exist {
-			return fmt.Errorf("no channel %s to send %v", to, msg)
-		}
-		chans[ChanKeyService] <- msg
-		return nil
-	}
-	chans[to] <- msg
+func SendMsg(ctx context.Context, msg interface{}) error {
+	OutChan(ctx) <- msg
 	return nil
 }
 
-func WaitMsg(ctx context.Context, chanName string) chan interface{} {
-	chans := ctx.Value(CtxKeyChans).(map[string]chan interface{})
-	if _, ok := chans[chanName]; !ok {
-		msg := MsgBase{}
-		resp := map[string]interface{}{
-			"error": fmt.Errorf("chan %s not ready yet", chanName),
-		}
-		msg.SetResponse(resp)
-		ret := make(chan interface{}, 1)
-		ret <- msg
-		return ret
-	}
-	return chans[chanName]
+func OutChan(ctx context.Context) chan interface{} {
+	return ctx.Value(CtxKeyOutchan).(chan interface{})
+}
+
+func InChan(ctx context.Context) chan interface{} {
+	return ctx.Value(CtxKeyInchan).(chan interface{})
 }
 
 func GetConfig(ctx context.Context) map[string]interface{} {
@@ -87,12 +94,3 @@ func LoadConfig(ctx context.Context, v interface{}) error {
 	}
 	return nil
 }
-
-// func GetChans(ctx context.Context) map[string]chan interface{} {
-// 	return ctx.Value(CtxKeyChans).(map[string]chan interface{})
-// }
-
-// func GetChan(ctx context.Context, chanName string) chan interface{} {
-// 	chans := GetChans(ctx)
-// 	return chans[chanName]
-// }

@@ -10,7 +10,7 @@ func main() {
 	// })
 	// logrus.SetOutput(os.Stdout)
 	// logrus.SetLevel(logrus.DebugLevel)
-	elsvc.SetupLogger("elsvc", elsvc.LogDebugLevel)
+	elsvc.SetupLogger("main", elsvc.LogDebugLevel)
 	err := elsvc.StartService("")
 	if err != nil {
 		elsvc.Error("start go plugin error: %s", err.Error())

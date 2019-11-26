@@ -25,22 +25,25 @@ type PluginLoaderIntf interface {
 	Stop(ctx context.Context) error
 }
 
-type PluginLoader struct {
+type pluginLoader struct {
 	goplugin   *plugin.Plugin
 	elplugin   PluginIntf
 	pluginPath string
+	logger     *Logger
 }
 
 // func (s PluginLoader) PluginPath() string {
 // 	return s.pluginPath
 // }
 
-func (s PluginLoader) Name() string {
+func (s pluginLoader) Name() string {
 	return s.elplugin.ModuleName()
 }
 
-func (s *PluginLoader) Load(pc PluginConfig) error {
-	pluginPath := FindLatestSO(pc.Type, pc.PluginPath())
+func (s *pluginLoader) Load(pc PluginConfig) error {
+	s.logger = NewModLogger("pluginLoader")
+
+	pluginPath := findLatestSO(pc.Type, pc.PluginPath())
 	if pluginPath == "" {
 		return fmt.Errorf("failed to find plugin for %s", pc.Type)
 	}
@@ -62,29 +65,29 @@ func (s *PluginLoader) Load(pc PluginConfig) error {
 	return nil
 }
 
-func (s *PluginLoader) Init(ctx context.Context) error {
+func (s *pluginLoader) Init(ctx context.Context) error {
 	return s.elplugin.Init(ctx)
 }
 
-func (s *PluginLoader) Start(ctx context.Context) error {
+func (s *pluginLoader) Start(ctx context.Context) error {
 	go func() {
 		err := s.elplugin.Start(ctx)
 		if err != nil {
-			logger.Error("plugin %s error from start: %s", s.pluginPath, err.Error())
+			s.logger.Error("plugin %s error from start: %s", s.pluginPath, err.Error())
 		}
-		logger.Info("plugin %s return from Start()", s.pluginPath)
+		s.logger.Info("plugin %s return from Start()", s.pluginPath)
 	}()
 	return nil
 }
 
-func (s *PluginLoader) Stop(ctx context.Context) error {
+func (s *pluginLoader) Stop(ctx context.Context) error {
 	return s.elplugin.Stop(ctx)
 }
 
 //FindLatestSO find the latest so under pluginPath
 // so file must format as: <plugin_name>.so.<int version>
 // returns: fullPluginPath
-func FindLatestSO(pluginName string, pluginPath string) string {
+func findLatestSO(pluginName string, pluginPath string) string {
 	// if plugin_path is a so file e.g. "./<plugin>.so"
 	if IsFile(pluginPath) {
 		return pluginPath

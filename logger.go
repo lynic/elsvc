@@ -23,41 +23,22 @@ type LoggerIntf interface {
 }
 
 func NewModLogger(name string) *Logger {
-	logOpt := &hclog.LoggerOptions{
-		Name:   fmt.Sprintf("plugin[%s]", name),
-		Output: os.Stdout,
-	}
-	switch logger.logLevel {
-	case LogInfoLevel:
-		logOpt.Level = hclog.Info
-	case LogDebugLevel:
-		logOpt.Level = hclog.Debug
-	}
+	mut.Lock()
+	defer mut.Unlock()
 	logg := &Logger{
-		hclogger: hclog.New(logOpt),
+		hclogger: logger.hclogger.Named(name),
 	}
 	return logg
 }
 
 func SetupLogger(name string, logLevel string) error {
-	logOpt := &hclog.LoggerOptions{
-		Name:   name,
-		Output: os.Stdout,
-	}
-	switch logLevel {
-	case LogInfoLevel:
-		logOpt.Level = hclog.Info
-	case LogDebugLevel:
-		logOpt.Level = hclog.Debug
-	default:
-		return fmt.Errorf("invalid logLevel %s", logLevel)
-	}
 	mut.Lock()
 	defer mut.Unlock()
-	logger = &Logger{
-		hclogger: hclog.New(logOpt),
-		logLevel: logLevel,
+	err := logger.SetLogLevel(logLevel)
+	if err != nil {
+		return err
 	}
+	logger.hclogger = logger.hclogger.ResetNamed(name)
 	return nil
 }
 
@@ -90,15 +71,13 @@ func init() {
 }
 
 type Logger struct {
-	Mode     string
-	logLevel string
+	// Mode     string
+	// logLevel string
 	hclogger hclog.Logger
 	// stdlogger *logrus.Logger
 }
 
 func (s *Logger) SetLogLevel(logLevel string) error {
-	mut.Lock()
-	defer mut.Unlock()
 	switch logLevel {
 	case LogDebugLevel:
 		s.hclogger.SetLevel(hclog.Debug)
@@ -107,7 +86,6 @@ func (s *Logger) SetLogLevel(logLevel string) error {
 	default:
 		return fmt.Errorf("invalid logLevel %s", logLevel)
 	}
-	s.logLevel = logLevel
 	return nil
 }
 
