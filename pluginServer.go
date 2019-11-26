@@ -7,11 +7,14 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/lynic/elsvc/proto"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
+//StartPlugin only used for hcplugin mode
+//call this function in main()
 func StartPlugin(pl PluginIntf) error {
+	//setup logger
+	setupLoggerPlugin()
 	//load plugin
 	pluginMap := map[string]plugin.Plugin{
 		PluginMapKey: &GRPCPlugin{
@@ -47,12 +50,12 @@ func (s *PluginServer) handler(ctx context.Context) error {
 			msg := v.(MsgBase)
 			req, err := MsgReq(msg)
 			if err != nil {
-				logrus.Errorf("failed to convert %+v to pbReq: %s", msg, err.Error())
+				logger.Error("failed to convert %+v to pbReq: %s", msg, err.Error())
 				continue
 			}
 			resp, err := s.client.Request(context.Background(), req)
 			if err != nil {
-				logrus.Errorf("failed to to get response from req: %s", err.Error())
+				logger.Error("failed to to get response from req: %s", err.Error())
 				continue
 			}
 			msg.SetRequestBytes(resp.Response)

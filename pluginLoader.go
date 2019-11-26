@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -71,9 +70,9 @@ func (s *PluginLoader) Start(ctx context.Context) error {
 	go func() {
 		err := s.elplugin.Start(ctx)
 		if err != nil {
-			logrus.Errorf("plugin %s error from start: %s", s.pluginPath, err.Error())
+			logger.Error("plugin %s error from start: %s", s.pluginPath, err.Error())
 		}
-		logrus.Infof("plugin %s return from Start()", s.pluginPath)
+		logger.Info("plugin %s return from Start()", s.pluginPath)
 	}()
 	return nil
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/lynic/elsvc/proto"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -37,10 +36,10 @@ func (s *PluginRunner) Load(pc PluginConfig) error {
 	}
 
 	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig: HandshakeConf(),
-		Plugins:         pluginMap,
-		Cmd:             exec.Command(binaryPath),
-		// Logger:           logger,
+		HandshakeConfig:  HandshakeConf(),
+		Plugins:          pluginMap,
+		Cmd:              exec.Command(binaryPath),
+		Logger:           logger.hclogger,
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 	})
 	s.pluginClient = client
@@ -132,7 +131,7 @@ func (s *PluginRunner) chanHandler(ctx context.Context) error {
 			req, _ := MsgReq(msg)
 			_, err := s.svcClient.Request(context.Background(), req)
 			if err != nil {
-				logrus.Errorf("failed to send %v for plugin %s", req, s.Name())
+				logger.Error("failed to send %v for plugin %s", req, s.Name())
 			}
 			return nil
 		case v := <-s.recvChan:
@@ -145,12 +144,12 @@ func (s *PluginRunner) chanHandler(ctx context.Context) error {
 					// 	return nil
 					// }
 					err := msg.GetResponse()["error"].(error)
-					logrus.Errorf("plugin %s error from start: %s", s.Name(), err.Error())
+					logger.Error("plugin %s error from start: %s", s.Name(), err.Error())
 				default:
-					logrus.Debugf("routing msg '%+v' for plugin %s", msg, s.Name())
+					logger.Debug("routing msg '%+v' for plugin %s", msg, s.Name())
 					err := SendMsg(ctx, &msg)
 					if err != nil {
-						logrus.Errorf("failed to send '%+v' for plugin %s", msg, s.Name())
+						logger.Error("failed to send '%+v' for plugin %s", msg, s.Name())
 					}
 				}
 			}

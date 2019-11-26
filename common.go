@@ -4,8 +4,6 @@ import (
 	"os"
 	"runtime"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 // IsDir reports whether the dir exists as a boolean
@@ -30,7 +28,7 @@ func IsFile(name string) bool {
 
 func WaitGoroutines(num int) {
 	for runtime.NumGoroutine() > num {
-		logrus.Debugf("wait goruntines: current=%d > expect=%d", runtime.NumGoroutine(), num)
+		logger.Debug("wait goruntines: current=%d > expect=%d", runtime.NumGoroutine(), num)
 		time.Sleep(1 * time.Second)
 	}
 }

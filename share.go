@@ -8,15 +8,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func StartGOPlugin(configPath string) error {
+func StartService(configPath string) error {
 	svc := &Service{}
-	logrus.Info("init service")
+	logger.Info("Init service")
 	err := svc.Init(configPath)
 	if err != nil {
 		logrus.Error(err)
 		return err
 	}
-	logrus.Info("start service")
+	logger.Info("Start service")
 	err = svc.Start()
 	if err != nil {
 		logrus.Error(err)
