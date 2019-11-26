@@ -172,13 +172,11 @@ func (s *PluginRunner) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// will hang here?
-	logrus.Debugf("#elynn start plugin  req %+v", req)
+	// send start plugin request
 	resp, err := s.svcClient.Request(context.Background(), req)
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("#elynn start plugin resp %+v", resp)
 	// Response is error message
 	rmsg, _ := RespMsg(resp)
 	errInt := rmsg.GetResponse()["error"]

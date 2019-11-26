@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"github.com/lynic/elsvc"
 )
 
-//go build -buildmode=plugin -o hello.so plugins/hello/hello.go
+// go build -buildmode=plugin -o hello.so plugins/hello/hello.go
+// go build -o hello.so plugins/hello2/main.go
 
 var PluginObj Hello
 
@@ -37,6 +40,11 @@ func (s *Hello) Stop(context.Context) error {
 }
 
 func init() {
-	fmt.Println("in Hello plugin init")
+	// fmt.Println("in Hello plugin init")
 	PluginObj = Hello{}
+}
+
+func main() {
+	// fmt.Println("in Hello plugin main")
+	elsvc.StartPlugin(&PluginObj)
 }

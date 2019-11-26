@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
@@ -16,7 +18,7 @@ import (
 const (
 	defaultChanLength = 1000
 	ChanKeyService    = "common"
-	minGoroutineNum   = 2
+	minGoroutineNum   = 3
 )
 
 const (
@@ -114,7 +116,7 @@ func (s *Service) LoadConfig(configPath string) error {
 
 func (s *Service) InitPlugin(pc PluginConfig) error {
 	// init plugin
-	logrus.Infof("initing plugin %s", pc.Type)
+	logrus.Infof("Initing plugin %s", pc.Type)
 	ctx := context.WithValue(
 		context.Background(), CtxKeyConfig, pc.Config())
 	pl := s.Plugins[pc.Type]
@@ -122,7 +124,7 @@ func (s *Service) InitPlugin(pc PluginConfig) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("inited plugin %s", pc.Type)
+	logrus.Infof("Inited plugin %s", pc.Type)
 	return nil
 }
 
@@ -207,6 +209,7 @@ func (s *Service) Init(configPath string) error {
 }
 
 func (s *Service) StartPlugin(pluginName string) error {
+	logrus.Infof("Starting plugin %s", pluginName)
 	pl := s.Plugins[pluginName]
 	ctx, cancel := context.WithCancel(context.WithValue(
 		context.Background(), CtxKeyChans, s.Chans))
@@ -215,23 +218,40 @@ func (s *Service) StartPlugin(pluginName string) error {
 	if err != nil {
 		return err
 	}
+	logrus.Infof("Started plugin %s", pluginName)
 	return nil
 }
 
 func (s *Service) StartPlugins() error {
+	logrus.Infof("Starting Plugins")
 	for ptype := range s.Plugins {
-		logrus.Debugf("#elynn starting plugin %s", ptype)
 		err := s.StartPlugin(ptype)
 		if err != nil {
 			return errors.Wrapf(err, "failed to start plugin %s", ptype)
 		}
+
 	}
 	return nil
 }
 
+func (s *Service) signalHandler() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		for sig := range c {
+			logrus.Debugf("Receive signal %+v", sig)
+			if sig.String() != os.Interrupt.String() {
+				continue
+			}
+			s.UnloadPlugins()
+			os.Exit(1)
+		}
+	}()
+}
+
 func (s *Service) Start() error {
 	// run plugins
-	logrus.Debugf("#elynn starting plugins")
+	go s.signalHandler()
 	err := s.StartPlugins()
 	if err != nil {
 		return err
@@ -312,23 +332,14 @@ func (s *Service) Start() error {
 	} // end for
 }
 
-// to find plugin config by pluginType for hcplugin mode unload
-// func (s *Service) findPluginConfig(pluginType string) PluginConfig {
-// 	for _, pc := range s.config.Plugins {
-// 		if pc.Type == pluginType {
-// 			return pc
-// 		}
-// 	}
-// 	return PluginConfig{}
-// }
-
 func (s *Service) UnloadPlugin(pluginType string) error {
+	logrus.Infof("Unloading plugin %s", pluginType)
 	if _, ok := s.Plugins[pluginType]; !ok {
 		return fmt.Errorf("failed to unload plugin %s: %s not found ", pluginType, pluginType)
 	}
 	pl := s.Plugins[pluginType]
 	// send cancel to start
-	logrus.Debugf("#elynn call cancel")
+	logrus.Infof("Send cancel message to plugin %s", pluginType)
 	s.cancelFuncs[pluginType]()
 	// run plugin stop
 	logrus.Infof("Stopping plugin %s", pluginType)
@@ -336,6 +347,7 @@ func (s *Service) UnloadPlugin(pluginType string) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to stop plugin %s", pluginType)
 	}
+	logrus.Infof("Stopped plugin %s", pluginType)
 	// delete pluginMap
 	delete(s.Plugins, pluginType)
 	// delete loadedpluginMap if in hashicorp mode
@@ -351,7 +363,7 @@ func (s *Service) UnloadPlugin(pluginType string) error {
 	delete(s.Chans, pluginType)
 	// delete cancel
 	delete(s.cancelFuncs, pluginType)
-	logrus.Infof("Stopped plugin %s", pluginType)
+	logrus.Infof("Unloaded plugin %s", pluginType)
 	return nil
 }
 
