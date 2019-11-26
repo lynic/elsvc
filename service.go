@@ -17,7 +17,7 @@ import (
 const (
 	defaultChanLength = 1000
 	ChanKeyService    = "common"
-	minGoroutineNum   = 3
+	minGoroutineNum   = 3 //1 for go-plugin, 1 for service, 1 for exitSignal
 )
 
 const (
@@ -113,6 +113,14 @@ func (s *Service) LoadConfig(configPath string) error {
 	if confObj.PluginMode != PluginModeGO && confObj.PluginMode != PluginModeHC {
 		return fmt.Errorf("Plugin mode %s is neither %s nor %s", confObj.PluginMode, PluginModeGO, PluginModeHC)
 	}
+	if confObj.LogLevel == "" {
+		confObj.LogLevel = LogDebugLevel
+	}
+	err = logger.SetLogLevel(confObj.LogLevel)
+	if err != nil {
+		logger.Error("failed to set logLevel to %s: %v", confObj.LogLevel, err)
+		return err
+	}
 	s.config = confObj
 	return nil
 }
@@ -204,7 +212,10 @@ func (s *Service) Init(configPath string) error {
 	if err != nil {
 		return err
 	}
+
 	s.logger.Info("pluginMode: %s", s.config.PluginMode)
+	s.logger.Info("logLevel: %s", s.config.LogLevel)
+
 	// load plugins
 	err = s.LoadPlugins()
 	if err != nil {
@@ -304,7 +315,7 @@ func (s *Service) Start() error {
 				s.logger.Info("Received stop msg, stopping service")
 				err := s.Stop()
 				msg.SetResponse(map[string]interface{}{"error": err})
-				WaitGoroutines(minGoroutineNum)
+				waitGoroutines(minGoroutineNum)
 				return nil
 			case MsgUnloadPlugin:
 				// msg := v.(MsgBase)

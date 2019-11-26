@@ -89,7 +89,7 @@ func (s *pluginLoader) Stop(ctx context.Context) error {
 // returns: fullPluginPath
 func findLatestSO(pluginName string, pluginPath string) string {
 	// if plugin_path is a so file e.g. "./<plugin>.so"
-	if IsFile(pluginPath) {
+	if isFile(pluginPath) {
 		return pluginPath
 	}
 	// if plugin_path is a so dir e.g. "./"

@@ -1,4 +1,4 @@
-FROM golang:1.13.4
+FROM golang:1.13.4-alpine
 
 ENV CONFIGPATH "/opt/etc/elsvc.yaml"
 

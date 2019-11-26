@@ -2,7 +2,7 @@
 set -x
 
 SVCNAME="elsvc"
-go build -o $SVCNAME cmd/main/main.go
+CGO_ENABLED=linux CGO_ENABLED=0 go build -o $SVCNAME cmd/main/main.go
 chmod a+x $SVCNAME
 mv $SVCNAME docker/
 cd docker/

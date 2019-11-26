@@ -6,12 +6,10 @@ import (
 	"github.com/lynic/elsvc"
 )
 
-// go build -buildmode=plugin -o hello.so plugins/hello/hello.go
-// go build -o hello.so plugins/hello2/main.go
+// CGO_ENABLED=linux CGO_ENABLED=0 go build -buildmode=plugin -o hello.so plugins/hello/main.go
+// CGO_ENABLED=linux CGO_ENABLED=0 go build -o hello.so plugins/hello/main.go
 
 var PluginObj Hello
-
-// var logger = elsvc.NewModLogger("hello")
 
 const ModuleName = "hello"
 
@@ -33,39 +31,43 @@ func (s *Hello) Init(ctx context.Context) error {
 }
 
 func (s *Hello) Start(ctx context.Context) error {
-	elsvc.Info("Hello.1 start")
+	elsvc.Info("Hello.%s start", s.Name)
 	// send msg to self channel
 	msg := elsvc.NewMsg(s.ModuleName(), "hello_printname")
 	msg.MsgTo = s.ModuleName()
-	// msg.MsgType = ""
 	elsvc.SendMsg(ctx, msg)
 	for {
 		select {
 		case <-ctx.Done():
-			elsvc.Info("Hello.1 start quit")
+			elsvc.Info("Hello.%s start quit", s.Name)
 			return nil
 		case v := <-elsvc.InChan(ctx):
-			_, ok := v.(elsvc.MsgBase)
+			msg, ok := v.(elsvc.MsgBase)
 			if !ok {
 				elsvc.Error("receive invalid msg %+v", v)
 			}
-			elsvc.Info("hello, my name is %s", s.Name)
+			switch msg.Type() {
+			case "hello_printname":
+				elsvc.Info("hello, my name is %s", s.Name)
+				continue
+			default:
+				elsvc.Error("receive msg with unknown type: %+v", msg)
+			}
+
 		}
 	}
 }
 
 func (s *Hello) Stop(context.Context) error {
-	elsvc.Info("Hello.1 stop")
+	elsvc.Info("Hello.%s stop", s.Name)
 	return nil
 }
 
 func init() {
-	// fmt.Println("in Hello plugin init")
 	PluginObj = Hello{}
 }
 
 //main() only needed for plugin_mode=hcplugin
 func main() {
-	// fmt.Println("in Hello plugin main")
 	elsvc.StartPlugin(&PluginObj)
 }

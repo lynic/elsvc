@@ -7,7 +7,7 @@ import (
 )
 
 // IsDir reports whether the dir exists as a boolean
-func IsDir(name string) bool {
+func isDir(name string) bool {
 	if fi, err := os.Stat(name); err == nil {
 		if fi.Mode().IsDir() {
 			return true
@@ -17,7 +17,7 @@ func IsDir(name string) bool {
 }
 
 // IsFile reports whether the named file exists as a boolean
-func IsFile(name string) bool {
+func isFile(name string) bool {
 	if fi, err := os.Stat(name); err == nil {
 		if fi.Mode().IsRegular() {
 			return true
@@ -26,7 +26,7 @@ func IsFile(name string) bool {
 	return false
 }
 
-func WaitGoroutines(num int) {
+func waitGoroutines(num int) {
 	for runtime.NumGoroutine() > num {
 		logger.Debug("wait goruntines: current=%d > expect=%d", runtime.NumGoroutine(), num)
 		time.Sleep(1 * time.Second)
