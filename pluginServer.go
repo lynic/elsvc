@@ -3,6 +3,7 @@ package elsvc
 import (
 	context "context"
 	"encoding/json"
+	"os"
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/lynic/elsvc/proto"
@@ -70,6 +71,27 @@ func (s *pluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		resp, err := msgResp(msg)
 		if err != nil {
 			return nil, err
+		}
+		return resp, nil
+	case MsgSetEnv:
+		// msg, err := reqMsg(req)
+		// if err != nil {
+		// 	s.logger.Error("failed to convert '%+v' to msg: %v", req, err)
+		// }
+		envKV := make(map[string]string)
+		err := json.Unmarshal(req.Request, &envKV)
+		if err != nil {
+			s.logger.Error("failed to convert '%+v' to msg: %v", req, err)
+		}
+		msg := NewMsg(req.To, req.Type)
+		err = os.Setenv(envKV["key"], envKV["value"])
+		if err != nil {
+			s.logger.Error("failed to setenv '%+v' to msg: %v", envKV, err)
+		}
+		msg.SetResponse(map[string]interface{}{"error": err})
+		resp, err := msgResp(msg)
+		if err != nil {
+			s.logger.Error("failed to convert '%+v' to resp: %v", msg, err)
 		}
 		return resp, nil
 	case MsgFuncInit:

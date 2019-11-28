@@ -24,6 +24,7 @@ type MsgBase struct {
 	MsgType     string
 	MsgRequest  map[string]interface{}
 	MsgResponse chan map[string]interface{}
+	response    map[string]interface{} // store response for multiple
 	TTL         int64
 }
 
@@ -129,7 +130,12 @@ func (s *MsgBase) SetRequestBytes(data []byte) error {
 
 //GetResponse get response
 func (s MsgBase) GetResponse() map[string]interface{} {
+	if s.response != nil {
+		// if GetResponse() called before
+		return s.response
+	}
 	resp := <-s.MsgResponse
+	s.response = resp
 	// tricky to handle two types of plugins
 	for k, v := range resp {
 		switch k {
@@ -149,8 +155,16 @@ func (s MsgBase) GetResponse() map[string]interface{} {
 }
 
 func (s MsgBase) GetResponseBytes() []byte {
-	resp := <-s.MsgResponse
+	var resp map[string]interface{}
+	if s.response != nil {
+		// if GetResponse() called before
+		resp = s.response
+	} else {
+		resp = <-s.MsgResponse
+		s.response = resp
+	}
 	if resp == nil {
+		// it should never be called
 		return []byte("")
 	}
 	// tricky to handle two types of plugins

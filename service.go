@@ -32,10 +32,10 @@ const (
 )
 
 type PluginConfig struct {
-	Type      string `json:"type"`
-	PluginDir string `json:"plugin_path"`
-	// ChanLength int                    `json:"chan_len"`
-	ConfMap map[string]interface{} `json:"config"`
+	Type      string                 `json:"type"`
+	PluginDir string                 `json:"plugin_path"`
+	ConfMap   map[string]interface{} `json:"config"`
+	EnvMap    map[string]string      `json:"env"`
 }
 
 func (s PluginConfig) PluginPath() string {

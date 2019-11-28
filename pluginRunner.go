@@ -21,8 +21,6 @@ type pluginRunner struct {
 	binaryPath   string
 	logger       *Logger
 	recvChan     chan interface{} // receive msg from pluginserver
-	// inChan       chan interface{} // message will send to pluginserver
-	// outChan      chan interface{} // message push to service
 }
 
 func (s *pluginRunner) Load(pc PluginConfig) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"plugin"
 	"strconv"
 	"strings"
@@ -58,6 +59,10 @@ func (s *pluginLoader) Load(pc PluginConfig) error {
 	elp, ok := symbol.(PluginIntf)
 	if !ok {
 		return fmt.Errorf("failed to convert PluginObj in %s", pluginPath)
+	}
+	// Set env
+	for k, v := range pc.EnvMap {
+		os.Setenv(k, v)
 	}
 	s.elplugin = elp
 	s.goplugin = p

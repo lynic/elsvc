@@ -14,6 +14,7 @@ const (
 	MsgFuncInit   = "func_init"
 	MsgFuncStart  = "func_start"
 	MsgFuncStop   = "func_stop"
+	MsgSetEnv     = "set_env"
 	MsgStartError = "start_error"
 	MsgCtxDone    = "ctx_done"
 )
