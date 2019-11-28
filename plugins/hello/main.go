@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/lynic/elsvc"
 )
@@ -22,6 +23,7 @@ func (s Hello) ModuleName() string {
 }
 
 func (s *Hello) Init(ctx context.Context) error {
+	elsvc.Info("env helloenv is %s", os.Getenv("helloenv"))
 	err := elsvc.LoadConfig(ctx, s)
 	if err != nil {
 		return err

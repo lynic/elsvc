@@ -65,6 +65,7 @@ func (s *pluginServer) startWrapper(ctx context.Context) error {
 func (s *pluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*proto.MsgResponse, error) {
 	switch req.Type {
 	case MsgFuncName:
+		s.logger.Debug("recv MsgFuncName request %+v", req)
 		name := s.PluginImpl.ModuleName()
 		msg := NewMsg(name, req.Type)
 		msg.SetResponse(map[string]interface{}{"name": name})
@@ -72,12 +73,10 @@ func (s *pluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		if err != nil {
 			return nil, err
 		}
+		s.logger.Debug("send MsgFuncName response %+v", resp)
 		return resp, nil
 	case MsgSetEnv:
-		// msg, err := reqMsg(req)
-		// if err != nil {
-		// 	s.logger.Error("failed to convert '%+v' to msg: %v", req, err)
-		// }
+		s.logger.Debug("recv MsgSetEnv request %+v", req)
 		envKV := make(map[string]string)
 		err := json.Unmarshal(req.Request, &envKV)
 		if err != nil {

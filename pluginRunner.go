@@ -21,13 +21,16 @@ type pluginRunner struct {
 	binaryPath   string
 	logger       *Logger
 	recvChan     chan interface{} // receive msg from pluginserver
+	// pluginConfig PluginConfig
 }
 
 func (s *pluginRunner) Load(pc PluginConfig) error {
+	s.logger = NewModLogger(fmt.Sprintf("pluginRunner.%s", pc.Type))
+	// s.pluginConfig = pc
 	//find binary
 	binaryPath := findLatestSO(pc.Type, pc.PluginPath())
 	if binaryPath == "" {
-		return fmt.Errorf("cound't find plugin binary for %s", pc.Type)
+		return fmt.Errorf("couldn't find plugin binary for %s", pc.Type)
 	}
 	s.binaryPath = binaryPath
 
@@ -48,22 +51,56 @@ func (s *pluginRunner) Load(pc PluginConfig) error {
 	// Connect via RPC
 	rpcClient, err := client.Client()
 	if err != nil {
+		s.logger.Error("failed to get rpcClient: %v", err)
 		return err
 	}
 	// Request the plugin
 	raw, err := rpcClient.Dispense(PluginMapKey)
 	if err != nil {
+		s.logger.Error("failed to request the plugin: %v", err)
 		return err
 	}
 	pluginClient := raw.(PluginClient)
 	s.svcClient = pluginClient.client
 	s.broker = pluginClient.broker
 	s.recvChan = make(chan interface{}, defaultChanLength)
-	s.logger = NewModLogger(fmt.Sprintf("pluginRunner.%s", s.Name()))
+	// s.logger = NewModLogger(fmt.Sprintf("pluginRunner.%s", s.Name()))
+	// set env
+	for k, v := range pc.EnvMap {
+		err := s.SetEnv(k, v)
+		if err != nil {
+			s.logger.Error("failed to setenv '%s: %s': %v", k, v, err)
+			return err
+		}
+	}
 	return nil
 }
 
-func (s pluginRunner) Name() string {
+func (s pluginRunner) SetEnv(key, value string) error {
+	msg := NewMsg("", MsgSetEnv)
+	msg.SetRequest(map[string]interface{}{
+		"key":   key,
+		"value": value,
+	})
+	req, err := msgReq(msg)
+	if err != nil {
+		return err
+	}
+	resp, err := s.svcClient.Request(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	rmsg, err := respMsg(resp)
+	if err != nil {
+		return err
+	}
+	if v, ok := rmsg.GetResponse()["error"]; ok && v != nil {
+		return v.(error)
+	}
+	return nil
+}
+
+func (s *pluginRunner) Name() string {
 	if s.PluginName != "" {
 		return s.PluginName
 	}

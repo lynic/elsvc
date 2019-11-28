@@ -129,7 +129,7 @@ func (s *MsgBase) SetRequestBytes(data []byte) error {
 }
 
 //GetResponse get response
-func (s MsgBase) GetResponse() map[string]interface{} {
+func (s *MsgBase) GetResponse() map[string]interface{} {
 	if s.response != nil {
 		// if GetResponse() called before
 		return s.response
@@ -154,7 +154,7 @@ func (s MsgBase) GetResponse() map[string]interface{} {
 	return resp
 }
 
-func (s MsgBase) GetResponseBytes() []byte {
+func (s *MsgBase) GetResponseBytes() []byte {
 	var resp map[string]interface{}
 	if s.response != nil {
 		// if GetResponse() called before
