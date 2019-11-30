@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	CtxKeyChans   = "chans"
 	CtxKeyConfig  = "config"
 	CtxKeyInchan  = "in_chan"
 	CtxKeyOutchan = "out_chan"

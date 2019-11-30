@@ -135,7 +135,6 @@ func (s *pluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 		ctx := context.WithValue(context.Background(), CtxKeyInchan, s.chans[s.PluginImpl.ModuleName()])
 		ctx = context.WithValue(ctx, CtxKeyOutchan, s.chans[ChanKeyService])
 		ctx, cancel := context.WithCancel(ctx)
-		// ctx, cancel := context.WithCancel(context.WithValue(context.Background(), CtxKeyChans, s.chans))
 		s.cancelStart = cancel
 		// start chan handler
 		go s.handler(ctx)

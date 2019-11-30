@@ -229,7 +229,6 @@ func (s *Service) StartPlugin(pluginName string) error {
 	pl := s.Plugins[pluginName]
 	ctx := context.WithValue(context.Background(), CtxKeyInchan, s.Chans[pluginName])
 	ctx = context.WithValue(ctx, CtxKeyOutchan, s.Chans[ChanKeyService])
-	// ctx = context.WithValue(ctx, CtxKeyChans, s.Chans)
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancelFuncs[pluginName] = cancel
 	err := pl.Start(ctx)
