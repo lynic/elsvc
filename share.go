@@ -94,3 +94,11 @@ func LoadConfig(ctx context.Context, v interface{}) error {
 	}
 	return nil
 }
+
+//Exit function for one time job, it will exit the application.
+func Exit(ctx context.Context) error {
+	msg := NewMsg(ChanKeyService, MsgTypeStop)
+	OutChan(ctx) <- msg
+	err := msg.GetError()
+	return err
+}
