@@ -12,7 +12,7 @@ const (
 )
 
 const (
-	MsgTypeErr  = "msg_error"
+	// MsgTypeErr  = "msg_error"
 	MsgTypeStop = "msg_stop"
 )
 
@@ -134,7 +134,6 @@ func (s *MsgBase) GetResponse() map[string]interface{} {
 		return s.response
 	}
 	resp := <-s.MsgResponse
-	s.response = resp
 	// tricky to handle two types of plugins
 	for k, v := range resp {
 		switch k {
@@ -150,18 +149,13 @@ func (s *MsgBase) GetResponse() map[string]interface{} {
 			}
 		}
 	}
+	s.response = resp
 	return resp
 }
 
 func (s *MsgBase) GetResponseBytes() []byte {
 	var resp map[string]interface{}
-	if s.response != nil {
-		// if GetResponse() called before
-		resp = s.response
-	} else {
-		resp = <-s.MsgResponse
-		s.response = resp
-	}
+	resp = s.GetResponse()
 	if resp == nil {
 		// it should never be called
 		return []byte("")
@@ -186,6 +180,7 @@ func (s *MsgBase) GetResponseBytes() []byte {
 }
 
 func (s *MsgBase) SetResponse(resp map[string]interface{}) error {
+	s.response = nil
 	if resp == nil {
 		s.MsgResponse <- make(map[string]interface{})
 		return nil
@@ -195,6 +190,7 @@ func (s *MsgBase) SetResponse(resp map[string]interface{}) error {
 }
 
 func (s *MsgBase) SetResponseBytes(data []byte) error {
+	s.response = nil
 	if len(data) == 0 {
 		return s.SetResponse(nil)
 	}
@@ -221,6 +217,23 @@ func (s *MsgBase) SetResponseBytes(data []byte) error {
 		}
 	}
 	return s.SetResponse(resp)
+}
+
+func (s *MsgBase) SetError(err error) {
+	s.SetResponse(map[string]interface{}{"error": err})
+}
+
+func (s *MsgBase) GetError() error {
+	resp := s.GetResponse()
+	if v, ok := resp["error"]; ok {
+		switch v.(type) {
+		case nil:
+			return nil
+		case error:
+			return v.(error)
+		}
+	}
+	return nil
 }
 
 // func (s *MsgBase) Expired() bool {

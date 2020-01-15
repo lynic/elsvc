@@ -62,6 +62,7 @@ func (s *pluginServer) startWrapper(ctx context.Context) error {
 	return nil
 }
 
+//Receive message from pluginRunner
 func (s *pluginServer) Request(ctx context.Context, req *proto.MsgRequest) (*proto.MsgResponse, error) {
 	switch req.Type {
 	case MsgFuncName:

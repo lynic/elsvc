@@ -26,6 +26,11 @@ const (
 )
 
 const (
+	RunModeJob = "job"
+	RunModeSvc = "service"
+)
+
+const (
 	MsgConfigReload = "reload_config"
 	MsgUnloadPlugin = "unload_plugin"
 	MsgLoadPlugin   = "load_plugin"
@@ -63,6 +68,7 @@ func (s PluginConfig) Config() map[string]interface{} {
 type ServiceConfig struct {
 	LogLevel   string         `json:"log_level"`
 	PluginMode string         `json:"plugin_mode"`
+	RunMode    string         `json:"run_mode"`
 	Plugins    []PluginConfig `json:"plugins"`
 }
 
@@ -107,12 +113,21 @@ func (s *Service) LoadConfig(configPath string) error {
 	if err != nil {
 		return err
 	}
+	//pluginMode
 	if confObj.PluginMode == "" {
 		confObj.PluginMode = "goplugin"
 	}
 	if confObj.PluginMode != PluginModeGO && confObj.PluginMode != PluginModeHC {
 		return fmt.Errorf("Plugin mode %s is neither %s nor %s", confObj.PluginMode, PluginModeGO, PluginModeHC)
 	}
+	//runMode
+	if confObj.RunMode == "" {
+		confObj.RunMode = RunModeSvc
+	}
+	if confObj.RunMode != RunModeSvc && confObj.RunMode != RunModeJob {
+		return fmt.Errorf("Run mode %s is neither %s nor %s", confObj.RunMode, RunModeSvc, RunModeJob)
+	}
+	//logLevel
 	if confObj.LogLevel == "" {
 		confObj.LogLevel = LogDebugLevel
 	}
@@ -246,6 +261,25 @@ func (s *Service) StartPlugins() error {
 		if err != nil {
 			return errors.Wrapf(err, "failed to start plugin %s", ptype)
 		}
+		// if in job mode, wait for start return msg
+		if s.config.RunMode == RunModeJob {
+			select {
+			case v := <-s.Chans[ChanKeyService]:
+				msg, ok := v.(MsgBase)
+				if !ok {
+					return fmt.Errorf("failed to convert msg %+v", v)
+				}
+				switch msg.Type() {
+				case MsgStartError:
+					err := msg.GetResponse()["error"].(error)
+					if err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("waiting MsgStartError but got %+v", err)
+				}
+			}
+		}
 
 	}
 	return nil
@@ -266,9 +300,21 @@ func (s *Service) signalHandler() {
 	}()
 }
 
+func (s *Service) startJobMode() error {
+	return nil
+}
+
 func (s *Service) Start() error {
-	// run plugins
+	// run pluginsjob
+	// start worker for kill signal
 	go s.signalHandler()
+	// run in job mode
+	// if s.config.RunMode == RunModeJob {
+	// 	s.logger.Info("Start service at job mode")
+	// 	return s.startJobMode()
+	// }
+	// run in service mode
+	s.logger.Info("Start service at service mode")
 	err := s.StartPlugins()
 	if err != nil {
 		return err

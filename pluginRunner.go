@@ -150,12 +150,14 @@ func (s *pluginRunner) Request(ctx context.Context, req *proto.MsgRequest) (*pro
 	s.logger.Debug("Recv request from pluginServer: %v", req)
 	switch req.Type {
 	case MsgStartError:
-		msg := NewMsg(req.To, req.Type)
-		if len(req.Request) == 0 {
-			msg.SetResponse(map[string]interface{}{})
-		} else {
-			msg.SetResponse(map[string]interface{}{"error": fmt.Errorf(string(req.Request))})
+		msg, err := reqMsg(req)
+		if err != nil {
+			s.logger.Error("failed to convert req %+v: %v", req, err)
 		}
+		msg.SetResponse(map[string]interface{}{
+			"plugin": s.Name(),
+			"error":  msg.GetRequest()["error"].(error),
+		})
 		s.recvChan <- msg
 	default:
 		msg, err := reqMsg(req)
@@ -205,8 +207,15 @@ func (s *pluginRunner) chanHandler(ctx context.Context) error {
 			switch msg.Type() {
 			case MsgStartError:
 				err := msg.GetResponse()["error"].(error)
-				s.logger.Error("plugin %s error from start: %s", s.Name(), err.Error())
+				s.logger.Debug("plugin %s start() return: %v", s.Name(), err)
+				// send out message to service
+				msg.MsgTo = ChanKeyService
+				SendMsg(ctx, msg)
 			default:
+				if msg.To() == s.Name() {
+					s.logger.Error("recv an unknown message %+v", msg)
+					continue
+				}
 				s.logger.Debug("routing msg '%+v' for plugin %s", msg, s.Name())
 				err := SendMsg(ctx, msg)
 				if err != nil {

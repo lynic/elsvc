@@ -81,6 +81,13 @@ func (s *pluginLoader) Start(ctx context.Context) error {
 			s.logger.Error("plugin %s error from start: %s", s.pluginPath, err.Error())
 		}
 		s.logger.Info("plugin %s return from Start()", s.pluginPath)
+		// return start() error to Service
+		msg := NewMsg(ChanKeyService, MsgStartError)
+		msg.SetResponse(map[string]interface{}{
+			"plugin": s.Name(),
+			"error":  err,
+		})
+		SendMsg(ctx, msg)
 	}()
 	return nil
 }
