@@ -34,6 +34,7 @@ const (
 	MsgConfigReload = "reload_config"
 	MsgUnloadPlugin = "unload_plugin"
 	MsgLoadPlugin   = "load_plugin"
+	MsgListPlugins  = "list_plugins"
 )
 
 type PluginConfig struct {
@@ -354,21 +355,25 @@ func (s *Service) Start() error {
 				s.Chans[ChanKeyService] <- msg
 			}
 
+			// message sent to controller itself
 			switch msg.Type() {
 			case MsgTypeStop:
-				// msg := v.(MsgBase)
 				s.logger.Info("Received stop msg, stopping service")
 				err := s.Stop()
 				msg.SetResponse(map[string]interface{}{"error": err})
 				waitGoroutines(minGoroutineNum)
 				return nil
 			case MsgUnloadPlugin:
-				// msg := v.(MsgBase)
 				pluginName := msg.GetRequest()["name"].(string)
 				err := s.UnloadPlugin(pluginName)
 				msg.SetResponse(map[string]interface{}{"error": err})
+			case MsgListPlugins:
+				resp := make(map[string]interface{})
+				for pluginName := range s.Plugins {
+					resp[pluginName] = true
+				}
+				msg.SetResponse(resp)
 			case MsgLoadPlugin:
-				// msg := v.(MsgBase)
 				pc := PluginConfig{}
 				data, _ := json.Marshal(msg.GetRequest())
 				err := json.Unmarshal(data, &pc)

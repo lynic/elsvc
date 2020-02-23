@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.3.2
+	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.3
 	github.com/hashicorp/go-hclog v0.0.0-20180709165350-ff2cf002a8dd
 	github.com/hashicorp/go-plugin v1.0.1
