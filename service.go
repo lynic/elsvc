@@ -361,8 +361,16 @@ func (s *Service) Start() error {
 				s.logger.Info("Received stop msg, stopping service")
 				err := s.Stop()
 				msg.SetResponse(map[string]interface{}{"error": err})
+				if v, ok := msg.GetRequest()["force"]; ok && v.(bool) {
+					s.logger.Info("Force quit, Exit...")
+					os.Exit(1)
+				}
 				waitGoroutines(minGoroutineNum)
-				return nil
+				if v, ok := msg.GetRequest()["error"]; ok {
+					s.logger.Debug("Stop msg with an error: %v", v.(error))
+					return v.(error)
+				}
+				return msg.GetError()
 			case MsgUnloadPlugin:
 				pluginName := msg.GetRequest()["name"].(string)
 				err := s.UnloadPlugin(pluginName)
