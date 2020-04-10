@@ -359,17 +359,21 @@ func (s *Service) Start() error {
 			switch msg.Type() {
 			case MsgTypeStop:
 				s.logger.Info("Received stop msg, stopping service")
-				err := s.Stop()
-				msg.SetResponse(map[string]interface{}{"error": err})
+				if _, ok := msg.GetRequest()["error"]; ok {
+					s.logger.Debug("Stop msg with an error: %v", v.(error))
+				}
+				// if force stop
 				if v, ok := msg.GetRequest()["force"]; ok && v.(bool) {
 					s.logger.Info("Force quit, Exit...")
-					os.Exit(1)
+					if v, ok := msg.GetRequest()["error"]; ok && v.(error) != nil {
+						os.Exit(1)
+					}
+					os.Exit(0)
 				}
+				// soft stop
+				err := s.Stop()
+				msg.SetResponse(map[string]interface{}{"error": err})
 				waitGoroutines(minGoroutineNum)
-				if v, ok := msg.GetRequest()["error"]; ok {
-					s.logger.Debug("Stop msg with an error: %v", v.(error))
-					return v.(error)
-				}
 				return msg.GetError()
 			case MsgUnloadPlugin:
 				pluginName := msg.GetRequest()["name"].(string)
