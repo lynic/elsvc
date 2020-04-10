@@ -359,7 +359,7 @@ func (s *Service) Start() error {
 			switch msg.Type() {
 			case MsgTypeStop:
 				s.logger.Info("Received stop msg, stopping service")
-				if _, ok := msg.GetRequest()["error"]; ok {
+				if v, ok := msg.GetRequest()["error"]; ok {
 					s.logger.Debug("Stop msg with an error: %v", v.(error))
 				}
 				// if force stop
