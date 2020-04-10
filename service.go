@@ -359,13 +359,13 @@ func (s *Service) Start() error {
 			switch msg.Type() {
 			case MsgTypeStop:
 				s.logger.Info("Received stop msg, stopping service")
-				if v, ok := msg.GetRequest()["error"]; ok {
+				if v, ok := msg.GetRequest()["error"]; ok && v != nil {
 					s.logger.Debug("Stop msg with an error: %v", v.(error))
 				}
 				// if force stop
 				if v, ok := msg.GetRequest()["force"]; ok && v.(bool) {
 					s.logger.Info("Force quit, Exit...")
-					if v, ok := msg.GetRequest()["error"]; ok && v.(error) != nil {
+					if v, ok := msg.GetRequest()["error"]; ok && v != nil {
 						os.Exit(1)
 					}
 					os.Exit(0)
